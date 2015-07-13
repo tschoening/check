@@ -10,7 +10,7 @@
 
 
 /**
- * Validate and existing Contao installation
+ * Validate an existing Contao installation
  *
  * @author Leo Feyer <https://github.com/leofeyer>
  */
@@ -41,6 +41,24 @@ class Validator
 	 */
 	protected $errors = array();
 
+	/**
+	 * Base dir for check itself
+	 * @var string
+	 */
+	protected $checkBaseDir = __DIR__;
+
+	/**
+	 * Base dir for contao supporting git clones
+	 * @var string
+	 */
+	protected $contaoBaseDir = '/../..';
+
+	/**
+	 * CTOR to init some properties and such
+	 */
+	public function __construct() {
+		$this->contaoBaseDir = $this->checkBaseDir . $this->contaoBaseDir;
+	}
 
 	/**
 	 * Check whether there is a Contao installation
@@ -53,7 +71,7 @@ class Validator
 			$this->validate();
 		}
 
-		include __DIR__ . '/../views/validator.phtml';
+		include $this->checkBaseDir . '/../views/validator.phtml';
 	}
 
 
@@ -165,17 +183,24 @@ class Validator
 	{
 		define('TL_ROOT', 'Required for Contao 2.11');
 
-		if (file_exists(__DIR__ . '/../../system/constants.php')) {
-			include __DIR__ . '/../../system/constants.php';
-		} elseif (file_exists(__DIR__ . '/../../system/config/constants.php')) {
-			include __DIR__ . '/../../system/config/constants.php';
-		} else {
-			$this->constants = false;
+		foreach (array(	$this->contaoBaseDir,
+				$this->contaoBaseDir . '/..')
+				as $baseDir) {
+			foreach (array('.', 'config') as $pathPrefix) {
+				if (!file_exists("$baseDir/system/$pathPrefix/constants.php")) {
+					continue;
+				}
 
-			return false;
+				include "$baseDir/system/$pathPrefix/constants.php";
+
+				$this->constants	= true;
+				$this->contaoBaseDir	= $baseDir;
+
+				return $this->constants;
+			}
 		}
 
-		return true;
+		return $this->constants = false;
 	}
 
 
@@ -218,7 +243,7 @@ class Validator
 				continue;
 			}
 
-			if (!file_exists(__DIR__ . "/../../$path")) {
+			if (!file_exists($this->contaoBaseDir . "/$path")) {
 				if ($this->isOptional($path)) {
 					$this->errors['optional'][] = $path;
 				} else {
@@ -226,7 +251,7 @@ class Validator
 					$this->errors['missing'][] = $path;
 				}
 			} else {
-				$buffer = str_replace("\r", '', file_get_contents(__DIR__ . "/../../$path"));
+				$buffer = str_replace("\r", '', file_get_contents($this->contaoBaseDir . "/$path"));
 
 				// Check the MD5 hash
 				if (strncmp(md5($buffer), $md5_file, 10) !== 0) {
